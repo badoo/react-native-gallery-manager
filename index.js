@@ -9,9 +9,9 @@ const RNGalleryManager = NativeModules.RNGalleryManager;
 const GalleryManager = {
     /**
      * Get Assets from the gallery
-     * @param {object} params           Object with params
-     * @param {string} params.type      Type of the asset. Can be - image, video, all
-     * @param {number} params.limit     Number of assets returned
+     * @param {object} params Object with params
+     * @param {string} params.type Type of the asset. Can be - image, video, all
+     * @param {number} params.limit Number of assets returned
      * @param {number} params.startFrom From which index to start
      * @param {string} params.albumName If requesting items from album -> set the album name
      */
@@ -27,10 +27,10 @@ const GalleryManager = {
         if (Platform.OS === 'ios') {
             return RNGalleryManager.requestAuthorization();
         } else {
-            return new Promise(async (resolve, reject) => {
+            return new Promise(async resolve => {
                 const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE, {
-                    title: title,
-                    message: message,
+                    title,
+                    message,
                 });
 
                 // On devices before SDK version 23, the permissions are automatically granted if they appear in the manifest,
@@ -42,7 +42,7 @@ const GalleryManager = {
                 if (isAuthorized) {
                     resolve({ isAuthorized: true });
                 } else {
-                    resolve({ isAuthorized: false })
+                    resolve({ isAuthorized: false });
                 }
             });
         }
@@ -51,9 +51,11 @@ const GalleryManager = {
 
     /**
      * Get List with album names
+     * @param {object} params Object with params
+     * @param {string} params.type Type of the asset. Can be - image, video, all
      */
-    getAlbums() {
-        return RNGalleryManager.getAlbums();
+    getAlbums(params) {
+        return RNGalleryManager.getAlbums(params);
     },
 
     /**
@@ -62,6 +64,6 @@ const GalleryManager = {
     convertVideo(params) {
         return RNGalleryManager.convertVideo(params);
     }
-}
+};
 
 module.exports = GalleryManager;

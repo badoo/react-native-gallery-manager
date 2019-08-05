@@ -1,5 +1,6 @@
 {
-  "name": "react-native-gallery-manager",
+  "name": "@magiclab/react-native-gallery-manager",
+  "private": false,
   "version": "1.0.9",
   "description": "List Gallery content from React-Native",
   "main": "index.js",

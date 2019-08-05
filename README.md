@@ -2,6 +2,7 @@
 
 #### Gallery manager for iOS and Android
 
+This version is customised to support iCloud library and Calabash support for automation.
 
 ## Installation
 
@@ -48,7 +49,7 @@ import GalleryManager from 'react-native-gallery-manager';
 ### Get Assets
 ```javascript
 GalleryManager.getAssets({
-    type: 'all',             
+    type: 'all',
     startFrom: 0,
 }).then((response) => {
 
@@ -100,21 +101,21 @@ GalleryManager.getAlbums().then((response) => {
 ##### Response
 
 ```javascript
-{ 
-    albums: 
-        [ 
-            { 
-            	assetCount: 616, title: 'WhatsApp' 
+{
+    albums:
+        [
+            {
+            	assetCount: 616, title: 'WhatsApp'
             },
-            { 
-            	assetCount: 6, title: 'Instagram' 
+            {
+            	assetCount: 6, title: 'Instagram'
             },
-            { 
-            	assetCount: 1, title: 'Twitter' 
+            {
+            	assetCount: 1, title: 'Twitter'
             },
             ...
         ],
-    totalAlbums: 24 
+    totalAlbums: 24
 }
 ```
 
@@ -123,12 +124,12 @@ GalleryManager.getAlbums().then((response) => {
 GalleryManager.requestAuthorization(title, message).then((response) => {
     // response.isAuthorized = true || false
 }).catch((err) => {
-    
+
 })
 ```
 | Props        	| Type          	| Default | Notes  |
 | ------------- 	|:-------------:	| :------:|:-----|
-| title      		| String 			| | (Android) title of the dialog | 
+| title      		| String 			| | (Android) title of the dialog |
 | message      | String 	     	| | (Android) message in the dialog |
 
 #### Convert Video (iOS only)
@@ -146,18 +147,18 @@ GalleryManager.convertVideo({
 
 | Props        	| Type          	| Default | Notes  |
 | ------------- 	|:-------------:	| :------:|:-----|
-| id      		| String 			| | The id of the video asset | 
+| id      		| String 			| | The id of the video asset |
 | convertTo      | String 	     	| |Can be mpeg4, m4v or mov |
 | quality 		| String      	| original |Can be original, high, medium, low |
 
 ##### Response
 ```javascript
-{ 
+{
   mimeType: 'video/x-m4v',
   path: 'file:///Users/pentarex/Library/Developer/CoreSimulator/Devices/81873DB4-A220-4F60-88B8-87521BB231E6/data/Containers/Data/Application/91EE6566-4D04-4E33-9608-EDB06DA6C6D2/Documents/8DAEDFBC-9E16-442D-A98F-E145F429DA0B.m4v',
   filename: '8DAEDFBC-9E16-442D-A98F-E145F429DA0B.m4v',
   type: 'video',
-  duration: 19.185833333333335 
+  duration: 19.185833333333335
 }
 ```
 The reason the library is returning the path of the file in this format is that the video can be send later to server with fetch library. If the url starts with assets-library:// not with file:// react-native will not send it.

@@ -29,7 +29,6 @@ public class GalleryCursorManager {
                 MediaStore.Images.Media.BUCKET_DISPLAY_NAME
         };
 
-
         String selection;
         switch (requestedType.toLowerCase()){
             case "image": {
@@ -62,7 +61,7 @@ public class GalleryCursorManager {
         return contentResolver.query(queryUri, projection, selection, selectionArgs, sortByAndLimit);
     }
 
-    public static Cursor getAlbumCursor(ReactApplicationContext reactContext) {
+    public static Cursor getAlbumCursor(String requestedType, ReactApplicationContext reactContext) {
         String[] projection = new String[] {
                 MediaStore.Images.ImageColumns.BUCKET_DISPLAY_NAME,
                 MediaStore.Images.ImageColumns.BUCKET_ID,
@@ -77,13 +76,33 @@ public class GalleryCursorManager {
 
         ContentResolver contentResolver = reactContext.getContentResolver();
         Uri queryUri = MediaStore.Files.getContentUri("external");
-        String BUCKET_GROUP_BY = MediaStore.Files.FileColumns.MEDIA_TYPE + "=" + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE
-                + " OR "
-                + MediaStore.Files.FileColumns.MEDIA_TYPE + "=" + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
-                + " and 1) GROUP BY 1,(2";
 
+        if (requestedType == null) {
+            requestedType = "";
+        }
 
-        return contentResolver.query(queryUri, projection, BUCKET_GROUP_BY, null, null);
+        String selection;
+        switch (requestedType.toLowerCase()){
+            case "image": {
+                selection = MediaStore.Files.FileColumns.MEDIA_TYPE + "=" + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE
+                    + ") GROUP BY 1,(2";
+                break;
+            }
+            case "video": {
+                selection = MediaStore.Files.FileColumns.MEDIA_TYPE + "=" + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                    + ") GROUP BY 1,(2";
+                break;
+            }
+            default: {
+                selection = MediaStore.Files.FileColumns.MEDIA_TYPE + "=" + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE
+                    + " OR "
+                    + MediaStore.Files.FileColumns.MEDIA_TYPE + "=" + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                    + " and 1) GROUP BY 1,(2";
+                break;
+            }
+        }
+
+        return contentResolver.query(queryUri, projection, selection, null, null);
 
     }
 }

@@ -19,7 +19,7 @@
                 @"all": [NSPredicate predicateWithFormat:@"(mediaType = %d) || (mediaType = %d)", PHAssetMediaTypeImage, PHAssetMediaTypeVideo]
                 };
   });
-  
+
   NSPredicate *filter = options[json ?: @"image"];
   if (!filter) {
     RCTLogError(@"Invalid type option: '%@'. Expected one of 'image',"
@@ -40,7 +40,7 @@
                 @"high": AVAssetExportPresetHighestQuality,
                 };
   });
-  
+
   NSString *filter = options[json ?: AVAssetExportPresetPassthrough];
   if (!filter) {
     RCTLogError(@"Invalid type option: '%@'. Expected one of 'original',"
@@ -60,7 +60,7 @@
                 @"mov": AVFileTypeQuickTimeMovie
                 };
   });
-  
+
   AVFileType filter = options[json ?: AVFileTypeMPEG4];
   if (!filter) {
     RCTLogError(@"Invalid type option: '%@'. Expected one of 'mpeg4',"
@@ -87,30 +87,49 @@ RCT_EXPORT_METHOD(getAssets:(NSDictionary *)params
   NSUInteger limit = [RCTConvert NSInteger:params[@"limit"]] ?: 10; // how many assets to return DEFAULT 10
   NSUInteger startFrom = [RCTConvert NSInteger:params[@"startFrom"]] ?: 0; // from which index should start DEFAULT 0
   NSString *albumName = [RCTConvert NSString:params[@"albumName"]] ?: @""; // album name
-  
-  
+
+
   // Build the options based on the user request (currently only type of assets)
   PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
   fetchOptions.predicate = predicate;
   fetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
-  
-  
+
+
   PHFetchResult<PHAsset *> * _Nonnull fetchResults;
   if (![albumName isEqualToString:@""])
   {
+//    PHFetchOptions *albumFetchOptions = [[PHFetchOptions alloc] init];
+//    albumFetchOptions.predicate = [NSPredicate predicateWithFormat:@"title = %@", albumName];
+//    PHFetchResult<PHAssetCollection *> * _Nonnull albums = [PHAssetCollection
+//                                                            fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum
+//                                                            subtype:PHAssetCollectionSubtypeAny
+//                                                            options:albumFetchOptions];
+
+    // NV: Old code doesn't work for smart albums for some reason, so we manually get the albums then filter on client
+    PHFetchResult<PHAssetCollection *> * _Nonnull albums = [PHAssetCollection
+                                                            fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum
+                                                            subtype:PHAssetCollectionSubtypeAny
+                                                            options:nil];
+
+    __block PHAssetCollection *collection;
+
+    [albums enumerateObjectsUsingBlock:^(PHAssetCollection *album, NSUInteger idx, BOOL *stop) {
+      if ([album.localizedTitle isEqualToString:albumName]) {
+        collection = album;
+      }
+    }];
+
     PHFetchOptions *albumFetchOptions = [[PHFetchOptions alloc] init];
-    albumFetchOptions.predicate = [NSPredicate predicateWithFormat:@"title = %@", albumName];
-    __block PHAssetCollection *collection = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum
-                                                                                     subtype:PHAssetCollectionSubtypeAny
-                                                                                     options:albumFetchOptions].firstObject;
-    fetchResults = [PHAsset fetchAssetsInAssetCollection:collection options:fetchOptions];
+    albumFetchOptions.predicate = predicate;
+    albumFetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
+    fetchResults = [PHAsset fetchAssetsInAssetCollection:collection options:albumFetchOptions];
   }
   else
   {
-    
+
     fetchResults = [PHAsset fetchAssetsWithOptions:fetchOptions]; // get the assets
   }
-  
+
   BOOL __block hasMore = NO;
   NSInteger endIndex = startFrom + limit;
   NSMutableArray<NSDictionary<NSString *, id> *> *assets = [NSMutableArray new];
@@ -126,9 +145,9 @@ RCT_EXPORT_METHOD(getAssets:(NSDictionary *)params
     indexSet = [[NSIndexSet alloc] initWithIndexesInRange:NSMakeRange(startFrom, (int)[fetchResults count] - startFrom)];
     endIndex = (int)[fetchResults count]-1;
   }
-  
+
   NSArray<PHAsset*>  *results = [fetchResults objectsAtIndexes:indexSet];
-  
+
   for (PHAsset* asset in results) {
     NSArray *resources = [PHAssetResource assetResourcesForAsset:asset ];
     if ([resources count] < 1) continue;
@@ -136,7 +155,7 @@ RCT_EXPORT_METHOD(getAssets:(NSDictionary *)params
     NSString *uit = ((PHAssetResource*)resources[0]).uniformTypeIdentifier;
     NSString *mimeType = (NSString *)CFBridgingRelease(UTTypeCopyPreferredTagWithClass((__bridge CFStringRef _Nonnull)(uit), kUTTagClassMIMEType));
     CFStringRef extension = UTTypeCopyPreferredTagWithClass((__bridge CFStringRef _Nonnull)(uit), kUTTagClassFilenameExtension);
-    
+
     [assets addObject:@{
                         @"type": [self getMediaType:([asset mediaType])],
                         @"width": @([asset pixelWidth]),
@@ -150,7 +169,7 @@ RCT_EXPORT_METHOD(getAssets:(NSDictionary *)params
                         @"duration": @([asset duration])
                         }];
   }
-  
+
   // resolve
   resolve(
           @{
@@ -160,77 +179,87 @@ RCT_EXPORT_METHOD(getAssets:(NSDictionary *)params
             @"totalAssets": @(fetchResults.count)
             }
           );
-  
+
   // reject
-  
-  
+
+
 }
 
 /* Get list of albums */
-RCT_EXPORT_METHOD(getAlbums: (RCTPromiseResolveBlock)resolve
+RCT_EXPORT_METHOD(getAlbums:(NSDictionary *)params
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
   checkPhotoLibraryConfig(); // check if the permission is set in info.plist
   PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
-  PHFetchResult<PHAssetCollection *> * _Nonnull albums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAny options:fetchOptions];
-  
+  PHFetchResult<PHAssetCollection *> * _Nonnull albums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAny options:fetchOptions];
+
   NSMutableArray<NSDictionary<NSString *, id> *> *result = [NSMutableArray new];
   [albums enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull album, NSUInteger index, BOOL * _Nonnull stop) {
+    long assetCount = album.estimatedAssetCount;
+
+    if (assetCount == NSNotFound) {
+      PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
+      fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType == %d", PHAssetMediaTypeImage];
+      assetCount = [PHAsset fetchAssetsInAssetCollection:album options:fetchOptions].count;
+    }
+
     [result addObject:@{
+                        @"id": [album localIdentifier],
                         @"title": [album localizedTitle],
-                        @"assetCount": @([album estimatedAssetCount])
-                        }];
+                        @"assetCount": @(assetCount)
+                      }];
   }];
-  
+
   resolve(
           @{
             @"albums": result,
             @"totalAlbums": @(albums.count)
             }
           );
-  
-  
+
+
 }
 
 RCT_EXPORT_METHOD(convertVideo:(NSDictionary *)params
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-  
+
   // Converting the params from the user
   NSString *assetId = [RCTConvert NSString:params[@"id"]] ?: @"";
   AVFileType outputFileType = [RCTConvert PHFileType:params[@"convertTo"]] ?: AVFileTypeMPEG4;
   NSString *pressetType = [RCTConvert PHCompressType:params[@"quality"]] ?: AVAssetExportPresetPassthrough;
-  
+
   // Throwing some errors to the user if he is not careful enough
   if ([assetId isEqualToString:@""]) {
     NSError *error = [NSError errorWithDomain:@"RNGalleryManager" code: -91 userInfo:nil];
     reject(@"Missing Parameter", @"id is mandatory", error);
     return;
   }
-  
+
   // Getting Video Asset
   NSArray* localIds = [NSArray arrayWithObjects: assetId, nil];
   PHAsset * _Nullable videoAsset = [PHAsset fetchAssetsWithLocalIdentifiers:localIds options:nil].firstObject;
-  
+
   // Getting information from the asset
   NSString *mimeType = (NSString *)CFBridgingRelease(UTTypeCopyPreferredTagWithClass((__bridge CFStringRef _Nonnull)(outputFileType), kUTTagClassMIMEType));
   CFStringRef uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, (__bridge CFStringRef _Nonnull)(mimeType), NULL);
   NSString *extension = (NSString *)CFBridgingRelease(UTTypeCopyPreferredTagWithClass(uti, kUTTagClassFilenameExtension));
-  
+
   // Creating output url and temp file name
   NSURL * _Nullable temDir = [[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
   NSString *newFileName = [[NSUUID UUID] UUIDString];
   NSString *tempName = [NSString stringWithFormat: @"%@.%@", newFileName, extension];
   NSURL *outputUrl = [NSURL fileURLWithPath:[temDir.path stringByAppendingPathComponent:tempName]];
-  
+
   // Setting video export session options
   PHVideoRequestOptions *videoRequestOptions = [[PHVideoRequestOptions alloc] init];
   videoRequestOptions.networkAccessAllowed = YES;
   videoRequestOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
-  
+
   // Creating new export session
   [[PHImageManager defaultManager] requestExportSessionForVideo:videoAsset options:videoRequestOptions exportPreset:pressetType resultHandler:^(AVAssetExportSession * _Nullable exportSession, NSDictionary * _Nullable info) {
-    
+
     exportSession.shouldOptimizeForNetworkUse = YES;
     exportSession.outputFileType = outputFileType;
     exportSession.outputURL = outputUrl;
@@ -273,11 +302,11 @@ RCT_EXPORT_METHOD(convertVideo:(NSDictionary *)params
       }
     }];
   }];
-  
-  
-  
-  
-  
+
+
+
+
+
 }
 
 /* To Request Authorization for photos */
@@ -285,7 +314,7 @@ RCT_EXPORT_METHOD(requestAuthorization:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
   [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
-    
+
     resolve(@{
               @"isAuthorized" : @((BOOL)(status == PHAuthorizationStatusAuthorized))
               });
@@ -314,7 +343,7 @@ RCT_EXPORT_METHOD(requestAuthorization:(RCTPromiseResolveBlock)resolve
     } else {
       uri = [NSString stringWithFormat:@"assets-library://asset/asset.%@?id=%@&ext=%@", extension, identifier, extension];
     }
-    
+
     return uri;
   }
   return @"";

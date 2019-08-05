@@ -7,11 +7,15 @@ package org.pentarex.rngallerymanager;
 import android.database.Cursor;
 import android.os.Build;
 import android.provider.MediaStore;
+import android.util.Log;
+
+import java.io.File;
 
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
@@ -36,10 +40,14 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
 
 
     @ReactMethod
-    public void getAssets(final ReadableMap params, final Promise promise) {
+    public WritableMap getAssets(final ReadableMap params, final Promise promise) {
         if (isJellyBeanOrLater()) {
-            promise.reject(new Exception("Version of Android must be > JellyBean"));
-            return;
+
+            if (promise != null) {
+                promise.reject(new Exception("Version of Android must be > JellyBean"));
+            }
+
+            return null;
         }
 
         String requestedType = "all";
@@ -67,9 +75,13 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
             gallery = GalleryCursorManager.getAssetCursor(requestedType, albumName, reactContext);
             WritableArray assets = new WritableNativeArray();
 
-            if(gallery.getCount() <= startFrom ) {
-                promise.reject("gallery index out of bound", "");
-                return;
+            if (gallery.getCount() <= startFrom) {
+
+                if (promise != null) {
+                    promise.reject("gallery index out of bound", "");
+                }
+
+                return null;
             } else {
                 response.putInt("totalAssets", gallery.getCount());
                 boolean hasMore = gallery.getCount() > startFrom + limit;
@@ -84,24 +96,35 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
 
             do {
                 WritableMap asset = getAsset(gallery);
-                assets.pushMap(asset);
+
+                // Only add assets which file exists
+                if (isValidAsset(asset)) {
+                    assets.pushMap(asset);
+                }
+
                 if (gallery.getPosition() == (startFrom + limit) - 1) break;
             } while (gallery.moveToNext());
 
             response.putArray("assets", assets);
 
-            promise.resolve(response);
+            if (promise == null) {
+                return response;
+            } else {
+                promise.resolve(response);
+            }
 
         } catch (SecurityException ex) {
             System.err.println(ex);
         } finally {
             if (gallery != null) gallery.close();
         }
+
+        return null;
     }
 
 
     @ReactMethod
-    public void getAlbums(final Promise promise) {
+    public void getAlbums(final ReadableMap params, final Promise promise) {
         if (isJellyBeanOrLater()) {
             promise.reject(new Exception("Version of Android must be > JellyBean"));
             return;
@@ -109,18 +132,46 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
 
         WritableMap response = new WritableNativeMap();
 
+        String requestedType = "all";
+        if (params.hasKey("type")) {
+            requestedType = params.getString("type");
+        }
 
         Cursor gallery = null;
         try {
-            gallery = GalleryCursorManager.getAlbumCursor(reactContext);
+            gallery = GalleryCursorManager.getAlbumCursor(requestedType, reactContext);
             WritableArray albums = new WritableNativeArray();
-            response.putInt("totalAlbums", gallery.getCount());
             gallery.moveToFirst();
             do {
                 WritableMap album = getAlbum(gallery);
+
+                // XXX: some devices like Samsung might have a dummy asset in an
+                // empty gallery so we check if the actual asset exists
+                if (album.getInt("assetCount") == 1) {
+                    WritableMap paramsAssets = new WritableNativeMap();
+                    paramsAssets.putString("type", requestedType);
+
+                    if (album.hasKey("albumName")) {
+                        paramsAssets.putString("albumName", album.getString("albumName"));
+                    }
+
+                    WritableMap albumAssets = getAssets(paramsAssets, null);
+                    ReadableArray assets = albumAssets.getArray("assets");
+
+                    if (assets.size() > 0) {
+                        ReadableMap uniqueAsset = assets.getMap(0);
+
+                        if (!isValidAsset(uniqueAsset)) {
+                            continue;
+                        }
+                    }
+
+                }
+
                 albums.pushMap(album);
             } while (gallery.moveToNext());
 
+            response.putInt("totalAlbums", albums.size());
             response.putArray("albums", albums);
 
             promise.resolve(response);
@@ -141,7 +192,8 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
         String fileName = gallery.getString(gallery.getColumnIndex(MediaStore.Files.FileColumns.DISPLAY_NAME));
         Double height = gallery.getDouble(gallery.getColumnIndex(MediaStore.Files.FileColumns.HEIGHT));
         Double width = gallery.getDouble(gallery.getColumnIndex(MediaStore.Files.FileColumns.WIDTH));
-        String uri = "file://" + gallery.getString(gallery.getColumnIndex(MediaStore.Files.FileColumns.DATA));
+        String originalUri = gallery.getString(gallery.getColumnIndex(MediaStore.Files.FileColumns.DATA));
+        String uri = "file://" + originalUri;
         Double id = gallery.getDouble(gallery.getColumnIndex(MediaStore.Files.FileColumns._ID));
 
 
@@ -152,6 +204,7 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
         asset.putString("filename", fileName);
         asset.putDouble("id", id);
         asset.putString("uri", uri);
+        asset.putString("originalUri", originalUri);
 
         if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
             asset.putDouble("duration", 0);
@@ -177,5 +230,28 @@ public class RNGalleryManagerModule extends ReactContextBaseJavaModule {
 
     private Boolean isJellyBeanOrLater() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN;
+    }
+
+    private Boolean isValidAsset(ReadableMap asset) {
+        String uri = null;
+
+        if (asset != null && asset.hasKey("originalUri")) {
+            uri = asset.getString("originalUri");
+        }
+
+        if (uri != null) {
+            try {
+                File assetFile = new File(uri);
+                return !isForbiddenAssetName(assetFile.getName()) && assetFile.exists();
+            } catch (Exception e) {}
+        }
+
+        return false;
+    }
+
+    private Boolean isForbiddenAssetName(String filename) {
+        // !$&Welcome@#Image.jpg is a filename of an asset that Samsung
+        // devices use in empty albums
+        return filename.equals("!$&Welcome@#Image.jpg");
     }
 }
