@@ -3,7 +3,7 @@ require 'json'
 package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 
 Pod::Spec.new do |s|
-  s.name         = "@magiclab_react-native-gallery-manager"
+  s.name         = "react-native-gallery-manager"
   s.version      = package['version']
   s.summary      = package['description']
   s.license      = package['license']
